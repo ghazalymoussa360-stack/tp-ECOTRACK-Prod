@@ -2,6 +2,7 @@ const request = require('supertest');
 const app = require('../../src/index');
 const db = require('../../src/db/database');
 const bcrypt = require('bcrypt');
+const { initSchema } = require('../../src/db/init');
 
 describe('Bins API Integration Tests', () => {
   let authToken;
@@ -9,6 +10,7 @@ describe('Bins API Integration Tests', () => {
   let collectorToken;
 
   beforeAll(async () => {
+    await initSchema();
     const passwordHash = await bcrypt.hash('testpass123', 10);
     
     await db.query(`TRUNCATE TABLE measurements, bins, users RESTART IDENTITY CASCADE`);

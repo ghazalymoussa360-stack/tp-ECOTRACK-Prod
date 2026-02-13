@@ -1,6 +1,6 @@
 # ECOTRACK API - Performance, Tests & Deployment Results
 
-**Test Date**: February 13, 2026  
+**Test Date**: February 13, 2026 
 **Environment**: Docker Compose (PostgreSQL 15 + Redis 7) + Node.js 18+  
 
 ---
@@ -9,42 +9,29 @@
 
 ### Unit Tests & Integration Tests 
 
-**Command Executed**: `npm test`  
-**Execution Time**: 2.82 seconds  
-**Date**: 2026-02-13 15:10:00 UTC
+**Command Executed**: `npm test -- --coverage`  
+**Execution Time**: 3.153 seconds  
+**Date**: 2026-02-13
 
 ####  Real Test Results
 ```
-Test Suites: 4 passed, 4 total
-Tests:       43 passed, 0 failed
+Test Suites: 8 passed, 8 total
+Tests:       109 passed, 0 failed
 Snapshots:   0 total
-Status:      ALL TESTS PASSED 
+Status:      ALL TESTS PASSED
 ```
 
+**Note**: Jest reported a worker process did not exit gracefully. If this persists, run with `--detectOpenHandles`.
+
 #### Test Breakdown (Real)
--  **errors.test.js**: 5 tests passed
-  - AppError creation (default + custom values)
-  - ValidationError with errors array
-  - NotFoundError (creation + default message)
-
--  **auth.service.test.js**: 8 tests passed
-  - register: valid data, invalid email, short password
-  - login: valid credentials, missing fields
-  - validateToken: valid token, invalid token
-
--  **bins.service.test.js**: 14 tests passed
-  - getAllBins (cache + no cache)
-  - getBinById (cache + no cache)
-  - createBin, updateBin, deleteBin
-  - validateBinData (valid + invalid latitude/waste_type)
-  - getCriticalBins
-
--  **bins.routes.test.js**: 16 tests passed
-  - Authentication: login, invalid creds, missing creds
-  - Bins CRUD: list, create, read (by ID), update, delete
-  - Stats: bin statistics, critical bins with threshold
-  - Health Checks: general, database, redis (REAL ENDPOINTS TESTED)
-  - Authorization: admin vs collector roles
+- **errors.test.js**: error classes (AppError, ValidationError, NotFoundError)
+- **auth.service.test.js**: register, login, token validation, refresh token
+- **auth.controller.test.js**: controller responses and error handling
+- **bins.service.test.js**: CRUD, cache, stats, validation
+- **bins.controller.test.js**: CRUD, stats, critical bins, waste type
+- **bins.repository.test.js**: queries, filters, CRUD, stats
+- **users.repository.test.js**: auth, CRUD, role updates
+- **bins.routes.test.js**: auth, RBAC, CRUD, stats, health checks
 
 ### Real Code Coverage Report
 
@@ -62,120 +49,101 @@ coverage/
 ┌────────────┬──────────┬──────────┬──────────┬──────────┐
 │ Metric     │ Required │ MEASURED │ Status   │ Δ        │
 ├────────────┼──────────┼──────────┼──────────┼──────────┤
-│ Statements │ 70%      │ 73.83%   │    PASS  │ +3.83%   │
-│ Functions  │ 70%      │ 72.5%    │    PASS  │ +2.5%    │
-│ Lines      │ 70%      │ 73.92%   │    PASS  │ +3.92%   │
-│ Branches   │ 70%      │ 67.19%   │     WARN │ -2.81%   │
+│ Statements │ 70%      │ 90.28%   │    PASS  │ +20.28%  │
+│ Functions  │ 70%      │ 88.75%   │    PASS  │ +18.75%  │
+│ Lines      │ 70%      │ 90.43%   │    PASS  │ +20.43%  │
+│ Branches   │ 70%      │ 77.47%   │    PASS  │ +7.47%   │
 └────────────┴──────────┴──────────┴──────────┴──────────┘
 ```
 
 #### Coverage by Module (Real Measurements)
 | Module | Stmt % | Func % | Branc % | Lines % | Status |
 |--------|--------|--------|---------|---------|--------|
-| Routes | 100%   |   100% |    100% |    100% |Perfect |
-|Services| 77.69% | 80% | 80.8% | 78.29% |  Good |
-|Middlewares | 88.88% | 77.77% | 68.18% | 88.7% | Good |
-|Controllers | 67.07% | 73.33% | 50% | 67.07% |  Partial |
-|Database | 86.48% | 75% | 75% | 86.48% | Good |
-|Utils | 70.17% | 72.72% | 76.92% | 70.17% |  Good |
-| Repositories | 53.09% | 60% | 50% | 53.09% |  Low |
+| Routes | 100% | 100% | 100% | 100% | Perfect |
+| Services | 84.61% | 86.66% | 83.83% | 85.27% | Good |
+| Middlewares | 88.88% | 77.77% | 68.18% | 88.7% | Good |
+| Controllers | 95.12% | 100% | 57.14% | 95.12% | Good |
+| Database | 91.89% | 87.5% | 75% | 91.89% | Good |
+| Utils | 70.17% | 72.72% | 76.92% | 70.17% | Good |
+| Repositories | 100% | 100% | 97.82% | 100% | Perfect |
 
 ---
 
 ## 2. Real Performance Benchmarks
 
+**Note**: Benchmarks below are from the last performance run on 2026-02-13. Re-run load tests if you need fresh metrics after recent test additions.
+
 ### Benchmark 1: GET /api/bins - Latency Comparison
 
-**Test Setup**: 50 sequential identical requests  
-**Endpoint**: GET /api/bins  
+**Test Setup**: 20 cold requests (cache flushed before each request), 50 warm requests  
+**Endpoint**: GET /api/bins (authenticated)  
 **Real Measurements**: February 13, 2026
 
-#### Latency WITHOUT Cache (Database Query)
+#### Latency WITHOUT Cache (Cache flushed per request)
 ```
-Request Pattern: Each request queries PostgreSQL
+Request Pattern: Redis cache flushed before each request
 ┌─────────────────────────────────────────────────────┐
-│ Mean Latency:           87 ms                        │
-│ Minimum:                78 ms                        │
-│ Maximum:                156 ms                       │
-│ P95 (95th percentile):  145 ms                       │
-│ P99 (99th percentile):  156 ms                       │
-│ Requests/sec:           11.5 req/s                   │
-│ Success Rate:           100% (50/50)                 │
-│ Database Queries:       50 queries                   │
+│ Sample Size:            20 requests                  │
+│ Mean Latency:           33.42 ms                     │
+│ Minimum:                19.18 ms                     │
+│ Maximum:                89.69 ms                     │
+│ P95 (95th percentile):  57.06 ms                     │
+│ P99 (99th percentile):  89.69 ms                     │
+│ Success Rate:           100% (20/20)                 │
 └─────────────────────────────────────────────────────┘
 ```
 
-#### Latency WITH Cache (Redis Cache Hit)
+#### Latency WITH Cache (Warm cache)
 ```
-Request Pattern: First request caches, next 49 hit Redis
+Request Pattern: Cache warmed, 50 consecutive hits
 ┌─────────────────────────────────────────────────────┐
-│ Mean Latency:           3.2 ms                       │
-│ Minimum:                2.1 ms                       │
-│ Maximum:                8.4 ms                       │
-│ P95 (95th percentile):  5.2 ms                       │
-│ P99 (99th percentile):  8.1 ms                       │
-│ Requests/sec:           312.5 req/s                  │
+│ Sample Size:            50 requests                  │
+│ Mean Latency:           25.35 ms                     │
+│ Minimum:                15.53 ms                     │
+│ Maximum:                57.12 ms                     │
+│ P95 (95th percentile):  49.94 ms                     │
+│ P99 (99th percentile):  57.12 ms                     │
 │ Success Rate:           100% (50/50)                 │
-│ Database Queries:       1 query (first hit only)     │
 └─────────────────────────────────────────────────────┘
 ```
 
 #### Cache Performance Improvement 
 | Metric | Without Cache | With Cache | Improvement |
 |--------|--------------|-----------|-------------|
-| Mean Latency | 87ms | 3.2ms | **27.2x faster** |
-| P95 Latency | 145ms | 5.2ms | **27.9x faster** |
-| Database Load | 50 queries | 1 query | **98% reduction** |
-| Throughput | 11.5 req/s | 312.5 req/s | **27.2x increase** |
+| Mean Latency | 33.42ms | 25.35ms | **1.32x faster** |
+| P95 Latency | 57.06ms | 49.94ms | **1.14x faster** |
 
-**Real Impact**: Redis cache reduces average response time from **87ms to 3.2ms**.
+**Real Impact**: Warm-cache responses are faster, but gains are smaller due to low baseline latency and per-request cache flush for cold runs.
 
 ---
 
-### Benchmark 2: Throughput - Single Instance vs PM2 Clustering
+### Benchmark 2: Load Testing (/health) - Artillery & Apache Bench
 
 **Test Configuration**:
-- Tool: Apache Bench (ab)
-- Total Requests: 1000
-- Concurrency: 50 simultaneous
-- Endpoint: GET /api/bins/stats
+- Endpoint: GET /health (no auth)
+- Date: February 13, 2026
 
-#### Single Instance (No Clustering)
+#### Artillery (quick)
 ```
-┌────────────────────────────────────────────────────────────┐
-│ Time for Tests:           8.234 seconds                    │
-│ Failed Requests:          0 (0% error rate)                │
-│ Requests per Second:      121.45 req/s                     │
-│ Mean Time per Request:    411.7 ms                         │
-│ Total Data Transferred:   245 KB                           │
-│ CPU Utilization:          ~80% (1 core maxed)            │
-│ Memory Usage:             78 MB                            │
-└────────────────────────────────────────────────────────────┘
+VUs: 50, Requests per VU: 20
+Total Requests: 1000
+Request Rate: 983/sec
+Response Time (ms): min 0, mean 1.7, p95 3, p99 4, max 40
+HTTP 200: 1000
+Failed: 0
 ```
 
-#### With PM2 Clustering (20 instances)
+#### Apache Bench (ab via Docker)
 ```
-┌────────────────────────────────────────────────────────────┐
-│ Time for Tests:           2.156 seconds                    │
-│ Failed Requests:          0 (0% error rate)                │
-│ Requests per Second:      464.18 req/s                     │
-│ Mean Time per Request:    107.8 ms                         │
-│ Total Data Transferred:   245 KB (same)                    │
-│ CPU Utilization:          ~20% per core (balanced)        │
-│ Memory Usage:             1.56 GB (20 × 78MB workers)     │
-└────────────────────────────────────────────────────────────┘
+Concurrency: 50
+Total Requests: 1000
+Time Taken: 0.862s
+Requests/sec: 1159.83
+Time per Request (mean): 43.110 ms
+Failed Requests: 222 (Length: 222)
 ```
 
-#### Clustering Improvement (REAL MEASUREMENTS)
-| Metric | Single Instance | Clustered (20x) | Improvement |
-|--------|-----------------|-----------------|-------------|
-| Throughput (req/s) | 121.45 | 464.18 | **3.82x** |
-| Avg Response Time | 411.7ms | 107.8ms | **3.82x faster** |
-| Total Time | 8.234s | 2.156s | **3.82x faster** |
-| CPU per Core | 80% (busy) | 20% (balanced) | Better scaling |
-| Max Concurrent | 50 | 1000+ | Better capacity |
-
-**Real Impact**: PM2 clustering improves throughput from **121 req/s to 464 req/s** (3.82x increase).
+**Note**: Apache Bench reports failed requests due to response length variance; HTTP 200 responses were still returned. Re-run if you need strict length consistency.
 
 ---
 
