@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: tp-ecotrack-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ecotrack
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ecotrack-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: tp-ecotrack-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ecotrack-network
+
+  api:
+    build: .
+    container_name: tp-ecotrack-api
+    ports:
+      - "3005:3005"
+    environment:
+      NODE_ENV: development
+      PORT: 3005
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ecotrack
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production-min-32-chars
+      JWT_REFRESH_SECRET: your-refresh-secret-key-change-in-production
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - ecotrack-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ecotrack-network:
+    driver: bridge
