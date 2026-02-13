@@ -1,0 +1,13 @@
+config:
+  target: http://127.0.0.1:3005
+  phases:
+    - duration: 10
+      arrivalRate: 10
+  defaults:
+    headers:
+      Authorization: "Bearer {{ token }}"
+      Content-Type: application/json
+scenarios:
+  - flow:
+      - get:
+          url: "/api/bins"
